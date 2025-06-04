@@ -1,0 +1,12 @@
+# Mac specific files
+.DS_Store
+
+# Eval plots & saved trained models
+*.png
+*.mat
+
+# Preprocessed data files
+data/**/inference/*
+!data/**/inference/inference.txt
+data/**/processed/*
+!data/**/processed/.gitkeep
