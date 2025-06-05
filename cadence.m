@@ -1,26 +1,25 @@
-% Daten laden
 baseDir = "./data/inference";
 dataFilePath = baseDir + "/inference.txt";
 data = readtable(dataFilePath, 'Delimiter', '\t', 'VariableNamingRule', 'preserve');
 assert(all(sum(ismissing(data)) == 0));
 
-% Beschleunigungsdaten extrahieren
+% Extracting acceleration data
 accX = data{:, 'AccX(g)'};
 accY = data{:, 'AccY(g)'};
 accZ = data{:, 'AccZ(g)'};
 
-% Magnitude der Beschleunigung berechnen
+% Calculate acceleration magnitude
 accMag = sqrt(accX.^2 + accY.^2 + accZ.^2);
 
-% DC-Offset entfernen
+% Remove DC offset
 accMag = accMag - mean(accMag);
 
-% Parameter
-fs = 50; % Abtastrate in Hz
-windowSize = 5; % Fenstergröße in Sekunden
-overlap = 0.5; % 50% Überlappung
+% Parameters
+fs = 50;  
+windowSize = 5;  
+overlap = 0.5; 
 
-% Gleitende Fensteranalyse
+% Sliding window analysis
 windowSamples = windowSize * fs;
 stepSize = windowSamples * (1 - overlap);
 numWindows = floor((length(accMag) - windowSamples) / stepSize) + 1;
@@ -29,23 +28,23 @@ stepFrequencies = zeros(numWindows, 1);
 timeWindows = zeros(numWindows, 1);
 
 for i = 1:numWindows
-    % Aktuelles Fenster extrahieren
+    % Window extraction
     startIdx = (i-1) * stepSize + 1;
     endIdx = startIdx + windowSamples - 1;
     window = accMag(startIdx:endIdx);
-    
-    % Zeit für dieses Fenster (Mittelpunkt)
+   
+    % Time for this window (center point)
     timeWindows(i) = (startIdx + endIdx) / (2 * fs);
     
-    % FFT für Frequenzanalyse
+    % FFT for frequency analysis
     nfft = 512;
     fftResult = abs(fft(window, nfft));
     fftResult = fftResult(1:floor(nfft/2)+1);
     
-    % Frequenzvektor
+    % Frequency vector
     freqs = (0:length(fftResult)-1) * fs / nfft;
     
-    % Schrittfrequenz im Bereich 1-4 Hz suchen
+    % Step frequency in range 1-4 Hz
     validIdx = (freqs >= 1) & (freqs <= 4);
     
     if any(validIdx)
@@ -57,31 +56,31 @@ for i = 1:numWindows
     end
 end
 
-% Zeit in Minuten umrechnen
+% Convert time to minutes
 timeMinutes = timeWindows / 60;
 
-% Plot mit weißem Hintergrund
+% Plot with white background
 figure('Position', [100, 100, 1000, 600], 'Color', 'w');
 ax = axes('Color', 'w', 'XColor', 'k', 'YColor', 'k');
 
-% Farbkodierung der Punkte (ähnlich Garmin)
+% Color coding of points 
 colors = zeros(length(stepFrequencies), 3);
 for i = 1:length(stepFrequencies)
     if stepFrequencies(i) < 100
-        colors(i,:) = [0.2, 0.2, 0.2]; % Grau für niedrige Werte
+        colors(i,:) = [0.2, 0.2, 0.2]; 
     elseif stepFrequencies(i) < 150
-        colors(i,:) = [1, 0.3, 0.3]; % Rot für mittlere Werte
+        colors(i,:) = [1, 0.3, 0.3]; 
     elseif stepFrequencies(i) < 180
-        colors(i,:) = [0.3, 0.6, 1]; % Blau für hohe Werte
+        colors(i,:) = [0.3, 0.6, 1];  
     else
-        colors(i,:) = [1, 0.3, 1]; % Magenta für sehr hohe Werte
+        colors(i,:) = [1, 0.3, 1];  
     end
 end
 
-% Scatter Plot mit Farbkodierung
+% Scatter plot with color coding
 scatter(timeMinutes, stepFrequencies, 80, colors, 'filled', 'MarkerEdgeColor', 'none');
 
-% Achsen-Styling
+% Axis styling
 grid on;
 ax.GridColor = [0.7, 0.7, 0.7];
 ax.GridAlpha = 0.5;
@@ -89,29 +88,29 @@ xlabel('Zeit (Minuten)', 'Color', 'k', 'FontSize', 12);
 ylabel('Schrittfrequenz (SPM)', 'Color', 'k', 'FontSize', 12);
 title('Cadence', 'Color', 'k', 'FontSize', 16, 'FontWeight', 'bold');
 
-% Y-Achse Limits
+% Y-axis limits
 ylim([50, max([200, max(stepFrequencies)+20])]);
 xlim([0, max(timeMinutes)]);
 
-% Schwarze Tick-Labels
 ax.XTickLabel = string(ax.XTick);
 ax.YTickLabel = string(ax.YTick);
 
-% Zeitformat für X-Achse (mm:ss)
+% Time format for X-axis (mm:ss)
 xticks_minutes = 0:1:ceil(max(timeMinutes));
 xticks(xticks_minutes);
 xticklabels(arrayfun(@(x) sprintf('%d:%02d', floor(x), mod(x*60, 60)), xticks_minutes, 'UniformOutput', false));
-% Durchschnittswert anzeigen
+
+% Display average value
 avgStepFreq = mean(stepFrequencies(stepFrequencies > 0));
 hold on;
 yline(avgStepFreq, 'r--', sprintf('Ø %.0f SPM', avgStepFreq), 'LineWidth', 1.5);
 hold off;
 
-% Detaillierte Analyse ausgeben
-fprintf('\n=== Schrittfrequenz-Analyse ===\n');
-fprintf('Durchschnittliche Schrittfrequenz: %.1f Schritte/Minute\n', mean(stepFrequencies));
-fprintf('Standardabweichung: %.1f SPM\n', std(stepFrequencies));
-fprintf('Minimum: %.1f SPM\n', min(stepFrequencies));
-fprintf('Maximum: %.1f SPM\n', max(stepFrequencies));
-fprintf('Gesamtdauer: %.1f Minuten\n', max(timeMinutes));
-fprintf('Anzahl analysierte Fenster: %d\n', numWindows);
+% Output detailed analysis
+fprintf('\n=== step frequency analysis ===\n');
+fprintf('mean step freauency: %.1f steps/minute\n', mean(stepFrequencies));
+fprintf('std: %.1f SPM\n', std(stepFrequencies));
+fprintf('min: %.1f SPM\n', min(stepFrequencies));
+fprintf('max: %.1f SPM\n', max(stepFrequencies));
+fprintf('duration: %.1f Minuten\n', max(timeMinutes));
+fprintf('number of analyised windows: %d\n', numWindows);

@@ -26,7 +26,6 @@ fprintf('Class 0 (not running): %d predictions (%.1f%%)\n', count_0, (count_0/to
 fprintf('Class 1 (running): %d predictions (%.1f%%)\n', count_1, (count_1/total_predictions)*100);
 fprintf('Total predictions: %d\n', total_predictions);
 
-% You can also use tabulate for a nice summary
 fprintf('\nDetailed breakdown:\n');
 tabulate(predictions_numeric)
 

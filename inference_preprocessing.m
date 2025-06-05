@@ -1,25 +1,24 @@
-% Definition der Dateipfade
-dataDir = "./data/inference";
+ dataDir = "./data/inference";
 dataFilePath = dataDir + "/inference.txt";
 
-% Einlesen der Daten
+% Data loading
 data = readtable(dataFilePath, 'Delimiter', '\t', 'VariableNamingRule', 'preserve');
 assert(all(sum(ismissing(data)) == 0));
 
 
 function data = preprocessData(rawData)        
-    % Beschleunigungsdaten extrahieren
+    % Extracting acceleration data
     accX = rawData{:, 'AccX(g)'};
     accY = rawData{:, 'AccY(g)'};
     accZ = rawData{:, 'AccZ(g)'};
     
-    % Berechnung der Gesamtbeschleunigung (magnitude)
+    % Calculate acceleration magnitude
     accMag = sqrt(accX.^2 + accY.^2 + accZ.^2);
     
-    % Abtastfrequenz ist bekannt
+    % Sampling rate
     fs = 50; % Hz
     
-    % Tiefpassfilter anwenden 
+    % Low-pass filter 
     cutoffFreq = 20; % Hz
     [b, a] = butter(4, cutoffFreq/(fs/2), 'low'); 
     accXFiltered = filtfilt(b, a, accX); 
@@ -27,7 +26,7 @@ function data = preprocessData(rawData)
     accZFiltered = filtfilt(b, a, accZ); 
     accMagFiltered = filtfilt(b, a, accMag);
     
-    % Hochpassfilter anwenden, um Schwerkraftkomponente zu entfernen
+    % High-pass filter
     cutoffFreqHigh = 0.1; % Hz
     [b, a] = butter(4, cutoffFreqHigh/(fs/2), 'high');
     accXHighpass = filtfilt(b, a, accXFiltered);
@@ -35,8 +34,8 @@ function data = preprocessData(rawData)
     accZHighpass = filtfilt(b, a, accZFiltered);
     
     % Define windowing parameters
-    windowSize = 2 * fs; % 2 Sekunden
-    overlap = 0.5; % 50% Überlappung
+    windowSize = 2 * fs; % 2 seconds
+    overlap = 0.5; % 50% overlap
     step = round(windowSize * (1 - overlap));
     numWindows = floor((length(accXHighpass) - windowSize) / step) + 1;
     
@@ -45,35 +44,35 @@ function data = preprocessData(rawData)
     for i = 1:numWindows
         startIdx = (i-1)*step + 1;
         endIdx = startIdx + windowSize - 1;
-        
-        % Fenster extrahieren / Filtern
+
+        % Window extraction
         xWindow = accXHighpass(startIdx:endIdx);
         yWindow = accYHighpass(startIdx:endIdx);
         zWindow = accZHighpass(startIdx:endIdx);
         magWindow = accMagFiltered(startIdx:endIdx);
         
-        % Zeitbasierte Features
-        features(i, 1:3) = [mean(xWindow), mean(yWindow), mean(zWindow)]; % Mittelwert
-        features(i, 4:6) = [std(xWindow), std(yWindow), std(zWindow)]; % Standardabweichung
-        features(i, 7:9) = [max(xWindow), max(yWindow), max(zWindow)]; % Maximum
-        features(i, 10:12) = [min(xWindow), min(yWindow), min(zWindow)]; % Minimum
+        % Timebased features
+        features(i, 1:3) = [mean(xWindow), mean(yWindow), mean(zWindow)];  
+        features(i, 4:6) = [std(xWindow), std(yWindow), std(zWindow)];
+        features(i, 7:9) = [max(xWindow), max(yWindow), max(zWindow)]; 
+        features(i, 10:12) = [min(xWindow), min(yWindow), min(zWindow)]; 
         
-        % Frequenzbasierte Features
+        % Frequencybased features
         % Remove DC offset to avoid bias
         magWindow = magWindow - mean(magWindow);
         
-        % Use zero-padding to improve frequency resolution
-        nfft = 512; % This gives us frequency resolution of 50/512 ≈ 0.098 Hz
+        % FFT for frequency analysis
+        nfft = 512;  
         fftResult = fft(magWindow, nfft);
         fftMag = abs(fftResult);
-        fftMag = fftMag(1:floor(nfft/2)+1); % Keep positive frequencies + Nyquist
+        fftMag = fftMag(1:floor(nfft/2)+1);  
         
         % Create frequency vector with improved resolution
         freqs = (0:length(fftMag)-1) * fs / nfft;
         
-        % Find dominant frequency (exclude very low frequencies that aren't meaningful)
-        minFreq = 0.5; % Ignore frequencies below 0.5 Hz
-        maxFreq = 10;  % Focus on human movement range
+        % Find dominant frequency
+        minFreq = 0.5;  
+        maxFreq = 10;   
         validIdx = (freqs >= minFreq) & (freqs <= maxFreq);
         
         if any(validIdx)
@@ -87,21 +86,13 @@ function data = preprocessData(rawData)
         
         features(i, 13) = dominantFreq;
         
-        % Spektrale Energie (exclude DC component at index 1)
+        % Spectral energy (exclude DC component at index 1)
         features(i, 14) = sum(fftMag(2:end).^2);
         
         % Debug output for first few windows
         if i <= 3
             fprintf('Window %d: Dominant frequency = %.2f Hz\n', i, dominantFreq);
         end
-        
-        % Dominante Frequenz
-        [~, maxIdx] = max(fftMag);
-        dominantFreq = freqs(maxIdx);
-        features(i, 13) = dominantFreq;
-    
-        % Spektrale Energie
-        features(i, 14) = sum(fftMag.^2);
         
         % Signal Magnitude Area (SMA)
         features(i, 15) = sum(abs(xWindow)) + sum(abs(yWindow)) + sum(abs(zWindow));    

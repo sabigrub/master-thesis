@@ -1,4 +1,3 @@
-% Define the directory containing data files
 dataDir = "./data";
 trainDataDir = dataDir  + '/train';
 testDataDir = dataDir + '/test';
@@ -73,41 +72,40 @@ function allData = mergeAndPersist(runningData, notRunningData, dataDir)
     writetable(runningData, runningDataOutput);
     fprintf('Combined data saved to %s\n', processedDir);
     
-    
-    % Beschleunigungsdaten extrahieren
+   % Extracting acceleration data
     accDataRunning = runningData(:, {'time', 'AccX(g)', 'AccY(g)', 'AccZ(g)', 'Target'});
     accDataNotRunning = notRunningData(:, {'time', 'AccX(g)', 'AccY(g)', 'AccZ(g)', 'Target'});
     
-    % Speichern der extrahierten Daten
+    % Save the combined data
     writetable(accDataRunning, processedDir + '/beschleunigungsdaten_running.csv');
     writetable(accDataNotRunning, processedDir + '/beschleunigungsdaten_not_running.csv');
     
-    % Daten lesen 
+    % Read data
     allData = [accDataRunning; accDataNotRunning];
     
-    % Speichere die modifizierte Tabelle
+    % Save the combined tabel
     combinedDataOutput = processedDir+'/combined_acceleration_data.csv';
     writetable(allData, combinedDataOutput);
     fprintf('Combined data has %d rows and %d columns.\n', height(allData), width(allData));
 end
 
 function data = preprocessData(rawData)        
-    % Beschleunigungsdaten extrahieren
+    % Extracting acceleration data
     accX = rawData{:, 'AccX(g)'};
     accY = rawData{:, 'AccY(g)'};
     accZ = rawData{:, 'AccZ(g)'};
     
-    % Berechnung der Gesamtbeschleunigung (magnitude)
+    % Calculate acceleration magnitude
     accMag = sqrt(accX.^2 + accY.^2 + accZ.^2);
     
-    % Abtastfrequenz ist bekannt
+    % Sampling rate
     fs = 50; % Hz
     
-    % Tiefpassfilter anwenden 
+    % Low-pass filter
     cutoffFreq = 20; % Hz
     [b, a] = butter(4, cutoffFreq/(fs/2), 'low'); accXFiltered = filtfilt(b, a, accX); accYFiltered = filtfilt(b, a, accY); accZFiltered = filtfilt(b, a, accZ); accMagFiltered = filtfilt(b, a, accMag);
     
-    % Hochpassfilter anwenden, um Schwerkraftkomponente zu entfernen
+    % High-pass filter
     cutoffFreqHigh = 0.1; % Hz
     [b, a] = butter(4, cutoffFreqHigh/(fs/2), 'high');
     accXHighpass = filtfilt(b, a, accXFiltered);
@@ -115,13 +113,12 @@ function data = preprocessData(rawData)
     accZHighpass = filtfilt(b, a, accZFiltered);
     
     % Define windowing parameters
-    windowSize = 2 * fs; % 2 Sekunden
-    overlap = 0.5; % 50% Überlappung
+    windowSize = 2 * fs; 
+    overlap = 0.5; 
     step = round(windowSize * (1 - overlap));
     numWindows = floor((length(accXHighpass) - windowSize) / step) + 1;
-    
-    %Feature-Extraktion für jedes Fenster
-    features = zeros(numWindows, 15); % 15 Features pro Fenster
+ 
+    features = zeros(numWindows, 15);  
     
     % Initialize labels array alongside features
     windowLabels = cell(numWindows, 1);
@@ -130,34 +127,34 @@ function data = preprocessData(rawData)
         startIdx = (i-1)*step + 1;
         endIdx = startIdx + windowSize - 1;
         
-        % Fenster extrahieren / Filtern
+        % Window extraction 
         xWindow = accXHighpass(startIdx:endIdx);
         yWindow = accYHighpass(startIdx:endIdx);
         zWindow = accZHighpass(startIdx:endIdx);
         magWindow = accMagFiltered(startIdx:endIdx);
         
-        % Zeitbasierte Features
-        features(i, 1:3) = [mean(xWindow), mean(yWindow), mean(zWindow)]; % Mittelwert
-        features(i, 4:6) = [std(xWindow), std(yWindow), std(zWindow)]; % Standardabweichung
-        features(i, 7:9) = [max(xWindow), max(yWindow), max(zWindow)]; % Maximum
-        features(i, 10:12) = [min(xWindow), min(yWindow), min(zWindow)]; % Minimum
+        % Timebased features
+        features(i, 1:3) = [mean(xWindow), mean(yWindow), mean(zWindow)];  
+        features(i, 4:6) = [std(xWindow), std(yWindow), std(zWindow)];  
+        features(i, 7:9) = [max(xWindow), max(yWindow), max(zWindow)];  
+        features(i, 10:12) = [min(xWindow), min(yWindow), min(zWindow)]; 
        
-        % Frequenzbasierte Features
-        % Remove Direct Current (DC) offset to avoid bias
+        % Frequencybased features
+        % Remove DC offset to avoid bias
         magWindow = magWindow - mean(magWindow);
         
-        % Use zero-padding to improve frequency resolution
-        nfft = 512; % This gives us frequency resolution of 50/512 ≈ 0.098 Hz
+        % FFT for frequency analysis
+        nfft = 512;  
         fftResult = fft(magWindow, nfft);
         fftMag = abs(fftResult);
-        fftMag = fftMag(1:floor(nfft/2)+1); % Keep positive frequencies + Nyquist
-        
+        fftMag = fftMag(1:floor(nfft/2)+1); 
+
         % Create frequency vector with improved resolution
         freqs = (0:length(fftMag)-1) * fs / nfft;
         
-        % Find dominant frequency (exclude very low frequencies that aren't meaningful)
-        minFreq = 0.5; % Ignore frequencies below 0.5 Hz
-        maxFreq = 10;  % Focus on human movement range
+        % Find dominant frequency
+        minFreq = 0.5;  
+        maxFreq = 10;   
         validIdx = (freqs >= minFreq) & (freqs <= maxFreq);
         
         if any(validIdx)
@@ -171,7 +168,7 @@ function data = preprocessData(rawData)
         
         features(i, 13) = dominantFreq;
         
-        % Spektrale Energie (exclude DC component at index 1)
+        % Spectral energy
         features(i, 14) = sum(fftMag(2:end).^2);
         
         % Debug output for first few windows
@@ -184,7 +181,7 @@ function data = preprocessData(rawData)
     
         % Assign label based on the majority activity type in this window
         windowActivity = rawData.Target(startIdx:endIdx);
-        windowLabels{i} = mode(windowActivity); % Most frequent activity in window
+        windowLabels{i} = mode(windowActivity);
     end
     
     % 9. Build final dataset

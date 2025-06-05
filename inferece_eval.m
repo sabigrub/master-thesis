@@ -6,7 +6,6 @@ predictions = readtable(dataFilePath, 'VariableNamingRule', 'preserve').predicti
 % Create time vector 
 time_minutes = (1:length(predictions)) / 60; % 1 window is 2 seconds but with 50% overalp
 
-% Create the figure
 figure('Position', [100, 100, 1200, 600]);
 
 % Create the main plot
@@ -24,7 +23,6 @@ ylabel('Aktivitätslevel', 'FontSize', 12);
 ylim([-0.1, 1.1]);
 grid on;
 set(gca, 'YTick', [0, 1], 'YTickLabel', {'Nicht-Laufen', 'Laufen'});
-% Blue background color
 set(gca, 'Color', [0.95, 0.98, 1]);
 
 % Create a summary subplot

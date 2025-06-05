@@ -1,4 +1,3 @@
-% Define the directory containing data files
 baseDir = ".";
 dataDir = baseDir + "/data";
 trainDataDir = dataDir + '/train';
@@ -12,12 +11,11 @@ testDataFile = testDataDir + '/processed/preprocessed_data.csv';
 trainData = readtable(trainDataFile, 'VariableNamingRule', 'preserve');
 testData = readtable(testDataFile, 'VariableNamingRule', 'preserve');
 
-fprintf('Train Dataset Analysis:\n');
-fprintf('Total train samples: %d\n', height(trainData));
+fprintf('Data analysis:\n');
+fprintf('Train samples: %d\n', height(trainData));
 fprintf('%d features and 1 targtet \n', width(trainData)-1);
 
-% Check class imbalance
-% sake of simplicity we will not handle the imbalance as its small enough
+% Class Imbalance
 classDistribution = tabulate(trainData.Target);
 classCounts = classDistribution(:, 2);
 imbalanceRatio = max(classCounts) / min(classCounts);
@@ -40,7 +38,7 @@ y_test = shuffledTestData.Target;         % Labels
 fprintf('Training samples: %d\n', length(y_train));
 fprintf('Test samples: %d\n', length(y_test));
 
-%% 4. Train Random Forest Classifier
+%% 4. Training des Random Forest Klassifikators
 fprintf('Training Random Forest Classifier...\n');
 numTrees = 100;
 RF_model = TreeBagger(numTrees, X_train, y_train, ...
@@ -67,12 +65,12 @@ cm_RF = confusionmat(y_test, RF_predictions);
 confusionchart(cm_RF, classNames);
 title('Random Forest Confusion Matrix');
 
-%% 8. Additional Simple Metrics
+%% 8. Additional Metrics
 fprintf('\nDetailed Results:\n');
 fprintf('Correct predictions: %d out of %d\n', sum(RF_predictions == y_test), length(y_test));
 fprintf('Incorrect predictions: %d\n', sum(RF_predictions ~= y_test));
 
-% Per-class accuracy (if you want to see how each class performs)
+ 
 for i = 1:length(uniqueClasses)
     classIdx = (y_test == uniqueClasses(i));
     classCorrect = sum(RF_predictions(classIdx) == y_test(classIdx));
